@@ -1,6 +1,7 @@
 import subprocess
 from typing import Union
 
+
 class ExecutionError(Exception):
     def __init__(self, code: int, out: str, err: str) -> None:
         self.code = code
@@ -9,6 +10,7 @@ class ExecutionError(Exception):
 
     def __str__(self):
         return f"Command failed with rc={self.code}. Stdout:\n{self.out}\nStderr:\n{self.err}\n"
+
 
 class Command:
 

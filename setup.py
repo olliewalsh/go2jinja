@@ -2,7 +2,7 @@
 # Copyright Contributors to the Eclipse BlueChi project
 #
 # SPDX-License-Identifier: LGPL-2.1-or-later
-from setuptools import setup, find_packages
+from setuptools import find_packages, setup
 
 
 def readme():
@@ -26,10 +26,10 @@ setup(
     include_package_data=True,
     package_data={"go2jinja": ["py.typed"]},
     zip_safe=True,
-    keywords=['go2jinja', 'python', 'Go', 'template', 'Jinja'],
+    keywords=["go2jinja", "python", "Go", "template", "Jinja"],
     classifiers=[
         "Programming Language :: Python",
         "Programming Language :: Python :: 3",
     ],
-    python_requires='>=3.9',
+    python_requires=">=3.9",
 )
