@@ -1,0 +1,70 @@
+name: Publish
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+
+  ghrelease:
+    name: Create GitHub release for BlueChi
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Mark source directory as safe
+        run: |
+          git config --global --add safe.directory $(pwd)
+
+      - name: Install dev dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Build python package
+        run: |
+          python3 "setup.py" bdist_wheel --dist-dir=dist/
+
+      - name: Create source zip and tarball
+        run: |
+          tar czf go2jinja.tar.gz dist/
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          generate_release_notes: true
+          prerelease: false
+          draft: false
+          token: ${{ secrets.GH_RELEASE_TOKEN }}
+          files: |
+            go2jinja.tar.gz
+
+
+  pypipublish:
+    name: Publish bluechi on PyPi
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Mark source directory as safe
+        run: |
+          git config --global --add safe.directory $(pwd)
+
+      - name: Install dev dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Build python package
+        run: |
+          python3 "setup.py" bdist_wheel --dist-dir=dist/
+
+      - name: Publish bluechi to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          packages-dir: dist/
