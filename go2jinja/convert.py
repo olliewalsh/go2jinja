@@ -409,11 +409,11 @@ def translate_continue_nodes(root_nodes: list[Node]) -> list[Node]:
 
 
 def is_jinja_template(content: str) -> bool:
-    return re.compile(R".*{%\-?.+\-?%}").match(content) is not None
+    return re.compile(R".*{%\-?.+\-?%}", re.S).match(content) is not None
 
 
 def is_go_template(content: str) -> bool:
-    return re.compile(R".*{{\-?.+\-?}}").match(
+    return re.compile(R".*{{\-?.+\-?}}", re.S).match(
         content
     ) is not None and not is_jinja_template(content)
 
