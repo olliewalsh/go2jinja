@@ -19,9 +19,7 @@ setup(
     author="Michael Engel",
     url="https://github.com/engelmi/go2jinja",
     license="LGPL-2.1-or-later",
-    install_requires=[
-        "regex>=2024.11.6",
-    ],
+    install_requires=[],
     packages=find_packages(),
     include_package_data=True,
     package_data={"go2jinja": ["py.typed"]},
