@@ -46,7 +46,7 @@ class FunctionType(Enum):
     NOT = "not"
 
     EQUALS = "eq"
-    NEQUALS = "neq"
+    NEQUALS = "ne"
     LESSER = "lt"
     LESSEREQUALS = "le"
     GREATER = "gt"
@@ -83,7 +83,14 @@ class FunctionNode:
 
     operands: list["FunctionNode"] = field(default_factory=lambda: [])
 
+    brackets: bool = False
+
     def to_jinja(self) -> str:
+        prefix = ""
+        postfix = ""
+        if self.brackets:
+            prefix = "("
+            postfix = ")"
         if self.type in [
             FunctionType.EQUALS,
             FunctionType.NEQUALS,
@@ -92,20 +99,36 @@ class FunctionNode:
             FunctionType.LESSER,
             FunctionType.LESSEREQUALS,
         ]:
-            return " or ".join(
-                [
-                    f"{self.operands[0].to_jinja()}{FUNCTION_MAPPING[self.type]}{self.operands[i].to_jinja()}"
-                    for i in range(1, len(self.operands))
-                ]
+            return (
+                prefix
+                + " or ".join(
+                    [
+                        f"{self.operands[0].to_jinja()}{FUNCTION_MAPPING[self.type]}{self.operands[i].to_jinja()}"
+                        for i in range(1, len(self.operands))
+                    ]
+                )
+                + postfix
             )
         elif self.type in [FunctionType.AND, FunctionType.OR]:
-            return f" {FUNCTION_MAPPING[self.type]} ".join(
-                [op.to_jinja() for op in self.operands]
+            return (
+                prefix
+                + f" {FUNCTION_MAPPING[self.type]} ".join(
+                    [op.to_jinja() for op in self.operands]
+                )
+                + postfix
             )
         elif self.type == FunctionType.NOT:
-            return f"{FUNCTION_MAPPING[self.type]} {self.operands[0].to_jinja()}"
+            return (
+                prefix
+                + f"{FUNCTION_MAPPING[self.type]} {self.operands[0].to_jinja()}"
+                + postfix
+            )
         elif self.type == FunctionType.LEN:
-            return f"({self.operands[0].to_jinja()}){FUNCTION_MAPPING[self.type]}"
+            return (
+                prefix
+                + f"({self.operands[0].to_jinja()}){FUNCTION_MAPPING[self.type]}"
+                + postfix
+            )
         elif self.type == FunctionType.SLICE:
             s = ":"
             if len(self.operands) == 2:
@@ -114,15 +137,23 @@ class FunctionNode:
                 s = ":".join(
                     self.operands[i].to_jinja() for i in range(1, len(self.operands))
                 )
-            return f"({self.operands[0].to_jinja()})[{s}]"
+            return prefix + f"({self.operands[0].to_jinja()})[{s}]" + postfix
         elif self.type == FunctionType.INDEX:
-            return f"({self.operands[0].to_jinja()})[{self.operands[1].to_jinja()}]"
+            return (
+                prefix
+                + f"({self.operands[0].to_jinja()})[{self.operands[1].to_jinja()}]"
+                + postfix
+            )
         elif self.type == FunctionType.PRINTF:
-            return f"{self.operands[0].to_jinja()}.format({', '.join([op.to_jinja() for op in self.operands[1:]])})"
+            return (
+                prefix
+                + f"{self.operands[0].to_jinja()}.format({', '.join([op.to_jinja() for op in self.operands[1:]])})"
+                + postfix
+            )
 
         if self.content.startswith('"') and self.content.endswith('"'):
-            return self.content.replace("\n", "\\n")
-        return self.content
+            return prefix + self.content.replace("\n", "\\n") + postfix
+        return prefix + self.content + postfix
 
 
 GO_SYMBOL_OPEN_BRACKETS = "{{"
@@ -133,8 +164,8 @@ JINJA_SYMBOL_STMT_OPEN_BRACKETS = "{{"
 JINJA_SYMBOL_STMT_CLOSE_BRACKETS = "}}"
 SYMBOL_REMOVE_WHITESPACE = "-"
 
-REGEX_VARIABLE = "(\\.[A-Za-z_][A-Za-z0-9_]*)"
-REGEX_LOCAL_VARIABLE = "(\\$\\.?[A-Za-z_][A-Za-z0-9_]*)"
+REGEX_VARIABLE = "(\\.[A-Za-z_][A-Za-z0-9_\\.]*)"
+REGEX_LOCAL_VARIABLE = "(\\$\\.?[A-Za-z_][A-Za-z0-9_\\.]*)"
 REGEX_NODE_START_BLOCK = f"{GO_SYMBOL_OPEN_BRACKETS}{SYMBOL_REMOVE_WHITESPACE}?\\s*"
 REGEX_NODE_PIPELINE = "(.+\\n*)"
 REGEX_NODE_END_BLOCK = f"\\s*{SYMBOL_REMOVE_WHITESPACE}?{GO_SYMBOL_CLOSE_BRACKETS}"
@@ -322,119 +353,6 @@ def parse_go_template(content: str) -> list[Node]:
     return root_nodes
 
 
-def translate_continue_nodes(root_nodes: list[Node]) -> list[Node]:
-    continue_nodes: list[Node] = []
-
-    def find_continue_nodes(nodes: list[Node]):
-        for node in nodes:
-            if node.type == NodeType.CONTINUE:
-                continue_nodes.append(node)
-            find_continue_nodes(node.children)
-
-    def add_if_continue_check_block(parent_node: Node, start_index: int) -> None:
-        to_wrap = parent_node.children[start_index:]
-        if not to_wrap:
-            return
-
-        if_node = Node(
-            -1,
-            -1,
-            f"{GO_SYMBOL_OPEN_BRACKETS} {NodeType.IF.value} {FunctionType.NEQUALS.value} {skip_variable} 1 "
-            f"{GO_SYMBOL_CLOSE_BRACKETS}",
-            NodeType.IF,
-            prev=to_wrap[0].prev,
-            next=to_wrap[0],
-            parent=parent_node,
-            children=to_wrap,
-            artificial=True,
-        )
-        end_node = Node(
-            -1,
-            -1,
-            f"{GO_SYMBOL_OPEN_BRACKETS} {NodeType.END.value} {GO_SYMBOL_CLOSE_BRACKETS}",
-            NodeType.END,
-            prev=to_wrap[-1],
-            next=to_wrap[-1].next,
-            parent=if_node,
-            children=[],
-            artificial=True,
-        )
-
-        if_node.end_scope_node = end_node
-        end_node.open_scope_node = if_node
-
-        to_wrap[0].prev = if_node
-        for elem in to_wrap:
-            elem.parent = if_node
-        to_wrap[-1].next = end_node
-
-        parent_node.children = parent_node.children[:start_index] + [if_node, end_node]
-
-    find_continue_nodes(root_nodes)
-
-    skip_variable = "$should_continue"
-    for continue_node in continue_nodes:
-        # find start of loop to initialize continue skip variable
-        #   and add if-end nodes for skipping
-        should_break = False
-        for_node = continue_node.parent
-        while for_node is not None and not should_break:
-            if for_node.type == NodeType.RANGE:
-                initial_set_node = Node(
-                    -1,
-                    -1,
-                    f"{GO_SYMBOL_OPEN_BRACKETS}{SYMBOL_REMOVE_WHITESPACE} {skip_variable} := 0"
-                    f"{SYMBOL_REMOVE_WHITESPACE}{GO_SYMBOL_CLOSE_BRACKETS}",
-                    NodeType.ASSIGNMENT,
-                    prev=for_node,
-                    next=for_node.next,
-                    parent=for_node,
-                    children=[],
-                    artificial=True,
-                )
-                for_node.next.prev = initial_set_node
-                for_node.next = initial_set_node
-                for_node.children = [initial_set_node] + for_node.children
-                should_break = True
-
-            start_index = 0
-            for child in for_node.children:
-                if child.start > continue_node.start and child.type not in [
-                    NodeType.ELIF,
-                    NodeType.END,
-                ]:
-                    continue
-                start_index += 1
-            add_if_continue_check_block(for_node, start_index)
-
-            for_node = for_node.parent
-
-        # transform continue node to assignment node
-        continue_node.type = NodeType.ASSIGNMENT
-        continue_node.start = -1
-        continue_node.end = -1
-        remove_whitespace_open = (
-            SYMBOL_REMOVE_WHITESPACE
-            if continue_node.content[len(GO_SYMBOL_OPEN_BRACKETS) + 1]
-            == SYMBOL_REMOVE_WHITESPACE
-            else ""
-        )
-        remove_whitespace_close = (
-            SYMBOL_REMOVE_WHITESPACE
-            if continue_node.content[(len(GO_SYMBOL_CLOSE_BRACKETS) + 1) * -1]
-            == SYMBOL_REMOVE_WHITESPACE
-            else ""
-        )
-        continue_node.content = (
-            f"{GO_SYMBOL_OPEN_BRACKETS}"
-            f"{remove_whitespace_open}{skip_variable} := 1 "
-            f"{remove_whitespace_close}{GO_SYMBOL_CLOSE_BRACKETS}"
-        )
-        continue_node.artificial = True
-
-    return root_nodes
-
-
 def is_jinja_template(content: str) -> bool:
     return re.compile(R".*{%\-?.+\-?%}", re.S).match(content) is not None
 
@@ -453,15 +371,15 @@ def go_to_jinja(content: str) -> str:
     loop_index_vars = []
 
     def transform_go_var_to_jinja(var: str, check_loop_vars: bool = True) -> str:
-        var = var.replace(".", "").lower()
+        var = var.lstrip("$.").lower()
         if check_loop_vars and loop_vars:
-            var = f'{loop_vars[-1]}["{var}"]'
+            var = f"{loop_vars[-1]}.{var}"
         return var
 
     def transform_go_local_var_to_jinja(var: str) -> str:
         if loop_index_vars and loop_index_vars[-1] == var:
             return "loop.index0"
-        return transform_go_var_to_jinja(var, False).replace("$", "").lower()
+        return transform_go_var_to_jinja(var, False).lower()
 
     def parse_pipeline(pipeline: str) -> str:
 
@@ -513,7 +431,7 @@ def go_to_jinja(content: str) -> str:
                         open_brackets -= 1
                         if open_brackets == 0:
                             end = i
-                            groups.append(func_content[start + 1 : end])
+                            groups.append((func_content[start + 1 : end], True))
                     elif c == '"' and prev_c != "\\":
                         quotes_open = not quotes_open
                     elif (
@@ -523,7 +441,7 @@ def go_to_jinja(content: str) -> str:
                         and prev_c != ")"
                     ):
                         end = i
-                        groups.append(func_content[start:end])
+                        groups.append((func_content[start:end], False))
                         start = i + 1
 
                     prev_c = c
@@ -532,10 +450,12 @@ def go_to_jinja(content: str) -> str:
                     if i == len(func_content):
                         rest = func_content[end:].lstrip(" )")
                         if rest != "":
-                            groups.append(rest)
+                            groups.append((rest, False))
 
-                for group in groups:
-                    node.operands.append(parse_functions(group))
+                for group, brackets in groups:
+                    child_node = parse_functions(group)
+                    child_node.brackets = brackets
+                    node.operands.append(child_node)
 
                 return node
 
@@ -559,8 +479,11 @@ def go_to_jinja(content: str) -> str:
             m = GO_KEYWORDS[NodeType.IF].match(node.content)
             if m is not None and len(m.groups()) == 2:
                 pipeline = m.groups()[1].strip()
+                to_parse = pipeline
+                if to_parse[-1] == SYMBOL_REMOVE_WHITESPACE:
+                    to_parse = to_parse[:-1]
                 return (
-                    node.content.replace(pipeline, parse_pipeline(pipeline))
+                    node.content.replace(to_parse, parse_pipeline(to_parse))
                     .replace(GO_SYMBOL_OPEN_BRACKETS, JINJA_SYMBOL_OPEN_BRACKETS)
                     .replace(GO_SYMBOL_CLOSE_BRACKETS, JINJA_SYMBOL_CLOSE_BRACKETS)
                 )
@@ -568,8 +491,11 @@ def go_to_jinja(content: str) -> str:
             m = GO_KEYWORDS[NodeType.ELIF].match(node.content)
             if m is not None and len(m.groups()) == 2:
                 pipeline = m.groups()[1].strip()
+                to_parse = pipeline
+                if to_parse[-1] == SYMBOL_REMOVE_WHITESPACE:
+                    to_parse = to_parse[:-1]
                 return (
-                    node.content.replace(pipeline, parse_pipeline(pipeline))
+                    node.content.replace(to_parse, parse_pipeline(to_parse))
                     .replace(node.type.value, "elif")
                     .replace(GO_SYMBOL_OPEN_BRACKETS, JINJA_SYMBOL_OPEN_BRACKETS)
                     .replace(GO_SYMBOL_CLOSE_BRACKETS, JINJA_SYMBOL_CLOSE_BRACKETS)
@@ -639,6 +565,14 @@ def go_to_jinja(content: str) -> str:
                 if m.groups()[1] is not None:
                     content = content.replace(m.groups()[1], "")
                 return content
+        elif node.type == NodeType.CONTINUE:
+            return node.content.replace(
+                GO_SYMBOL_OPEN_BRACKETS, JINJA_SYMBOL_OPEN_BRACKETS
+            ).replace(GO_SYMBOL_CLOSE_BRACKETS, JINJA_SYMBOL_CLOSE_BRACKETS)
+        elif node.type == NodeType.BREAK:
+            return node.content.replace(
+                GO_SYMBOL_OPEN_BRACKETS, JINJA_SYMBOL_OPEN_BRACKETS
+            ).replace(GO_SYMBOL_CLOSE_BRACKETS, JINJA_SYMBOL_CLOSE_BRACKETS)
 
         return node.content
 
@@ -649,7 +583,7 @@ def go_to_jinja(content: str) -> str:
             res += nodes_to_jinja_str(node.children)
         return res
 
-    return nodes_to_jinja_str(translate_continue_nodes(parse_go_template(content)))
+    return nodes_to_jinja_str(parse_go_template(content))
 
 
 def tree_structure(nodes: list[Node], level: int) -> str:

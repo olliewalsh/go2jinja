@@ -1,0 +1,14 @@
+{
+    "Test: Simple Message": {
+        "Messages": [
+            {
+                "Role": "user",
+                "Content": "Something from user"
+            },
+            {
+                "Role": "assistant",
+                "Content": "Something from assistant"
+            }
+        ]
+    }
+}
