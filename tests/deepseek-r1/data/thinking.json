@@ -1,0 +1,16 @@
+{
+    "Test: Thinking Message": {
+        "IsThinkSet": true,
+        "Messages": [
+            {
+                "Role": "user",
+                "Content": "Something from user"
+            },
+            {
+                "Role": "assistant",
+                "Content": "Something from assistant",
+                "Thinking": "These are my thoughts"
+            }
+        ]
+    }
+}

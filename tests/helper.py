@@ -60,7 +60,9 @@ def run_test(test_name: str, input_file: str, go_file: str = ""):
     for _, test_data in data.items():
         try:
             rtemplate = Environment(
-                loader=BaseLoader, keep_trailing_newline=True
+                loader=BaseLoader,
+                keep_trailing_newline=True,
+                extensions=["jinja2.ext.loopcontrols"],
             ).from_string(jinjatmpl)
         except Exception as ex:
             print("Failed to load jinja template:")

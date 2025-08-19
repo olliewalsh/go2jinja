@@ -9,12 +9,17 @@ import (
 )
 
 type Message struct {
-	Role    string `json:"Role"`
-	Content string `json:"Content"`
+	Role     string `json:"Role"`
+	Content  string `json:"Content"`
+	Thinking string `json:"Thinking"`
 }
 
 type TestData struct {
-	Messages []Message `json:"Messages"`
+	Messages   []Message `json:"Messages"`
+	System     string    `json:"System"`
+	Tools      []string  `json:"Tools"`
+	ToolCalls  []string  `json:"ToolCalls"`
+	IsThinkSet bool      `json:"IsThinkSet"`
 }
 
 func main() {
