@@ -12,7 +12,7 @@ def readme():
 
 setup(
     name="go2jinja",
-    version="0.1.4",
+    version="0.2.0",
     description="Library for converting Go Templates to Jinja Templates",
     long_description=readme(),
     long_description_content_type="text/markdown",
